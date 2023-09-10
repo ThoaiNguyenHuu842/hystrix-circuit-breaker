@@ -1,6 +1,5 @@
-key-service:
+kyc-service:
   url: localhost:8082
-
 
 feign:
   hystrix:
