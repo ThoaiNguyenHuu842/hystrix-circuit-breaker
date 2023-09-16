@@ -241,4 +241,45 @@ public class VerificationServiceClientTest {
 
     Assertions.assertTrue(!myCircuitBreaker.isOpen());
   }
+
+  @Test
+  public void circuitWillBeClosedAgain() throws InterruptedException {
+    /**
+     * Given: hystrix circuit breaker is configured with requestVolumeThreshold = 5,
+     * sleepWindowInMilliseconds: 2000
+     * errorThresholdPercentage: 40 %
+     */
+    WireMock.stubFor(WireMock.post(WireMock.urlPathEqualTo("/kyc/thoai"))
+      .willReturn(WireMock.aResponse()
+        .withBody(ApplicationUtil.SUCCESS_MESSAGE)
+        .withStatus(200)));
+    WireMock.stubFor(WireMock.post(WireMock.urlPathEqualTo("/kyc/camila"))
+      .willReturn(WireMock.aResponse()
+        .withStatus(500)));
+
+    verificationServiceClient.verify("thoai");
+    verificationServiceClient.verify("camila");
+    verificationServiceClient.verify("camila");
+    verificationServiceClient.verify("thoai");
+    verificationServiceClient.verify("camila");
+
+    Thread.sleep(3000);
+
+    HystrixCircuitBreaker myCircuitBreaker = HystrixCircuitBreaker.Factory.getInstance(
+      HystrixCommandKey.Factory.asKey("VerificationServiceClient#verify(String)"));
+
+    /**
+     * when the circuit is already opened
+     */
+
+    String response = verificationServiceClient.verify("thoai");
+    //then response is cached with fallback
+    Assertions.assertEquals(response, ApplicationUtil.FALLBACK_MESSAGE);
+
+    Thread.sleep(2000);
+    response = verificationServiceClient.verify("thoai");
+    Assertions.assertEquals(response, ApplicationUtil.SUCCESS_MESSAGE);
+    //the circuit will be closed again after 2000ms and the response is success
+    Assertions.assertTrue(!myCircuitBreaker.isOpen());
+  }
 }
